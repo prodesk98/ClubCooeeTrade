@@ -1,0 +1,15 @@
+[Unit]
+Description=Club Cooee
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/market/ClubCooee
+Restart=on-failure
+User=root
+Group=root
+WorkingDirectory=/root/market/
+Environment="RUST_LOG=info"
+
+[Install]
+WantedBy=multi-user.target
