@@ -34,7 +34,8 @@ async fn start(
     telegram: Telegram,
     hostname: String,
     proxy: Proxy,
-    connection: Arc<RwLock<Connection>>,
+    traders: Arc<RwLock<Connection>>,
+    sold: Arc<RwLock<Connection>>,
     cache: Arc<RwLock<ItemCache>>
 ) -> Result<(), Box<dyn std::error::Error>> {
     // create a new session
@@ -52,7 +53,8 @@ async fn start(
         seller,
         buyer,
         telegram,
-        connection,
+        traders,
+        sold,
         cache,
     );
     // start checking
@@ -113,13 +115,24 @@ async fn main() {
             .collect()
     );
 
-    // Connection items
-    let connection = Arc::new(
+    // Connection trades
+    let connection_trades = Arc::new(
         RwLock::new(
             Connection::new(
                 mongo_client
                     .database("clubcooee_trade")
                     .collection("trades")
+            )
+        )
+    );
+
+    // Connection sold
+    let connection_sold = Arc::new(
+        RwLock::new(
+            Connection::new(
+                mongo_client
+                    .database("clubcooee_trade")
+                    .collection("sold")
             )
         )
     );
@@ -142,7 +155,8 @@ async fn main() {
         let account_buyer_clone = rr_accounts_buyer.next().await.clone().unwrap().clone();
         let telegram_clone = telegram.clone();
         let proxy_clone = proxy.clone();
-        let connection_clone = Arc::clone(&connection);
+        let connection_trades_clone = Arc::clone(&connection_trades);
+        let connection_sold_clone = Arc::clone(&connection_sold);
         let cache_clone = Arc::clone(&cache);
         //
 
@@ -154,7 +168,8 @@ async fn main() {
             telegram_clone,
             hostname,
             proxy_clone,
-            connection_clone,
+            connection_trades_clone,
+            connection_sold_clone,
             cache_clone,
         ).await {
             Ok(_) => {},

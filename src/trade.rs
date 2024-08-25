@@ -39,18 +39,6 @@ impl Trade {
         sum / period as f64
     }
 
-    fn std(&self) -> f64 {
-        let recent_history: Vec<f64> = self.history.iter().rev().take(10).cloned().collect();
-        let len = self.history.len();
-        if len < 2 {
-            return 0.0;
-        }
-
-        let mean = recent_history.iter().sum::<f64>() / len as f64;
-        let variance = recent_history.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / len as f64;
-        variance.sqrt()
-    }
-
     fn rsi(&self, period: usize) -> f64 {
         let len = self.history.len();
         if len < period {
@@ -79,25 +67,18 @@ impl Trade {
 
     pub fn strategy(&mut self, desired_profit_margin: f64) -> bool {
         self.remove_outliers_iqr();
-        let ma = self.moving_average(10);
-        let std = self.std();
-        let rsi = self.rsi(10);
+        let ma = self.moving_average(5);
+        if ma == 0.0 {
+            return false;
+        }
+
+        let rsi = self.rsi(5);
         let resale_price = self.resale(desired_profit_margin);
 
-        eprintln!("std: {:.2}, rsi: {:.2}, ma: {:.2}, history: {:?}", std, rsi, ma, self.history);
+        eprintln!("rsi: {:.2}, ma: {:.2}, current: {:.2}", rsi, ma, self.current);
 
         if
-        resale_price < ma && self.history.len() >= 10 && self.current >= 190.0 &&
-            self.current <= 1990.0 && rsi >= 50.0 && rsi < 70.0 &&
-            std <= 600.0
-        {
-            eprintln!("{} current: {:.2}, ma: {:.2}, resale: {:.2}, history: {:?}, std: {:.2}", "[+]".green().bold(),
-              self.current,
-              ma,
-              resale_price,
-              self.history,
-              std
-            );
+        resale_price < ma && self.history.len() >= 5 && self.current <= 1990.0 && rsi >= 70.0 {
             true
         } else {
             false

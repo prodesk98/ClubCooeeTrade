@@ -15,7 +15,8 @@ use crate::trade::Trade;
 
 #[derive(Clone)]
 pub struct Bot {
-    connection: Arc<RwLock<Connection>>,
+    traders: Arc<RwLock<Connection>>,
+    sold: Arc<RwLock<Connection>>,
     cache: Arc<RwLock<ItemCache>>,
     market: Market,
 }
@@ -26,11 +27,13 @@ impl Bot {
         seller: ConfigAccount,
         buyer: ConfigAccount,
         telegram: Telegram,
-        connection: Arc<RwLock<Connection>>,
+        traders: Arc<RwLock<Connection>>,
+        sold: Arc<RwLock<Connection>>,
         cache: Arc<RwLock<ItemCache>>,
     ) -> Self {
         Self {
-            connection,
+            traders,
+            sold,
             cache,
             market: Market::new(
                 socket,
@@ -55,16 +58,44 @@ impl Bot {
 
         eprintln!("{} found {} items... {:?}", "[*]".blue().bold(), items.len(), _s.elapsed());
 
+        let market = self.market.clone();
+        let items_solid = match timeout(
+            Duration::from_secs(10),
+            market.sold()
+        ).await {
+            Ok(sold) => sold?,
+            Err(_) => {
+                return Err("Failed to fetch sold items".into());
+            }
+        };
+        let sold = Arc::clone(&self.sold);
+        let sold_guard = sold.write().await;
+        for it in items_solid {
+            if sold_guard.read(doc! {"id": it.id}).await?.len() == 0 {
+                sold_guard.create(
+                    doc! {
+                        "id": it.id,
+                        "itemt": it.itemt,
+                        "name": it.name,
+                        "price": it.price,
+                        "created_at": Bson::String(chrono::Utc::now().to_rfc3339()),
+                    }
+                ).await?;
+            }
+        }
+        drop(sold_guard);
+
         let mut tasks = Vec::new();
         for item in items {
             let cache = Arc::clone(&self.cache);
-            let connection = Arc::clone(&self.connection);
+            let traders = Arc::clone(&self.traders);
+            let sold = Arc::clone(&self.sold);
             let market = self.market.clone();
 
             let task = tokio::spawn(async move {
                 match timeout(
-                    Duration::from_secs(5),
-                    Self::verify(item, cache, connection, market)).await {
+                    Duration::from_secs(15),
+                    Self::verify(item, cache, traders, sold, market)).await {
                         Ok(_) => {},
                         Err(e) => eprintln!("{} Error: {:?}", "[-]".red().bold(), e),
                     }
@@ -79,7 +110,8 @@ impl Bot {
     async fn verify(
         item: Item,
         cache: Arc<RwLock<ItemCache>>,
-        connection: Arc<RwLock<Connection>>,
+        traders: Arc<RwLock<Connection>>,
+        sold: Arc<RwLock<Connection>>,
         market: Market
     ) -> Result<(), Box<dyn std::error::Error>> {
         // time start
@@ -88,14 +120,29 @@ impl Bot {
         // cache guard read
         let cache_guard_read = cache.write().await;
 
+        let item_id = item.id.to_string();
+        let item_template = item.itemt.clone();
+
         // check if item is already cached
-        if cache_guard_read.contains(&item.id.to_string()) {
+        if cache_guard_read.contains(&item_id) {
             return Err("Item already cached".into());
         }
         drop(cache_guard_read);
 
-        let search = market.search(item.itemt).await?;
-        let mut trade = Trade::new(search.history, item.price as f64);
+        let sold_guard = sold.write().await;
+        let item_sold = sold_guard.read(doc! {"itemt": item_template}).await?;
+        drop(sold_guard);
+
+        if item_sold.len() < 5 {
+            return Err("Item not qualified. min 5 items".into());
+        }
+        // select prices history
+        let history = item_sold.iter().map(|it| it.get_i32("price").unwrap_or(0)).collect::<Vec<i32>>();
+        // i32 to f64
+        let history = history.iter().map(|&x| x as f64).collect::<Vec<f64>>();
+
+        // trade verification
+        let mut trade = Trade::new(history, item.price as f64);
         let qualified = trade.strategy(10.0);
 
         if !qualified {
@@ -121,18 +168,18 @@ impl Bot {
         }
 
         // connection guard
-        let connection_guard = connection.write().await;
+        let traders_guard = traders.write().await;
 
         let item = item.clone();
-        connection_guard.create(
+        traders_guard.create(
             doc! {
                     "id": item.id,
                     "price": item.price.to_string(),
                     "resale": resale.to_string(),
-                    "timestamp": Bson::String(chrono::Utc::now().to_rfc3339()),
+                    "created_at": Bson::String(chrono::Utc::now().to_rfc3339()),
                 }
         ).await?;
-        drop(connection_guard);
+        drop(traders_guard);
 
         match market.sell(item.id, resale).await {
             Ok(_) => {

@@ -28,37 +28,24 @@ impl Market {
         }
     }
 
-    pub async fn search(&self, itemt: u32) -> Result<ItemMarket, Box<dyn std::error::Error>> {
-        // HTTP request
-        let request = self.socket.http(
-            "/api3/trade_search",
-            format!("template_id={}&seller_id=0&token={}", itemt, self.socket.token)
-        );
-
-        // TCP connection
-        let stream = self.socket.connect().await?;
-        let mut tls_stream = self.socket.tls_connect(stream).await?;
-
-        tls_stream.write_all(request.as_bytes()).await?;
-
-        let mut buffer = [0; 1024*2];
-        let n = tls_stream.read(&mut buffer).await?;
-        let response = String::from_utf8_lossy(&buffer[..n]);
-
-        if !response.contains("prices") {
-            return Err("Failed to search item".into());
+    fn fp4(&self) -> String {
+        // generate fp4
+        let mut fp4 = String::new();
+        for _ in 0..32 {
+            let random = rand::random::<u8>();
+            fp4.push_str(&format!("{:x}", random));
         }
-
-        Ok(ItemMarket {
-            history: parse::prices(&response),
-        })
+        fp4
     }
 
     pub async fn fetch(&self) -> Result<Vec<Item>, Box<dyn std::error::Error>> {
         // HTTP request
         let request = self.socket.http(
             "/api3/trade_get_items",
-            format!("sort=2&token={}&fp4=74d8ca5a4c539ac6d2dcc22f6591cf8f&build=aj.24.726.1455", self.socket.token)
+            format!(
+                "sort=2&token={}&fp4={}&build=aj.24.726.1455",
+                self.socket.token, self.fp4()
+            )
         );
 
         // TCP connection
@@ -92,11 +79,12 @@ impl Market {
         let request = self.socket.http(
             "/api3/trade_sell",
             format!(
-                "id={}&price={}&duration_days={}&token={}&udid={}",
+                "id={}&price={}&duration_days={}&token={}&fp4={}&udid={}&build=aj.24.726.1455",
                 id,
                 price,
                 1,
                 self.seller.token,
+                self.fp4(),
                 self.seller.udid
             )
         );
@@ -132,9 +120,10 @@ impl Market {
         let request = self.socket.http(
             "/api3/trade_buy",
             format!(
-                "id={}&token={}&udid={}",
+                "id={}&token={}&fp4={}&udid={}&build=aj.24.726.1455",
                 item.id,
                 self.buyer.token,
+                self.fp4(),
                 self.buyer.udid
             )
         );
@@ -168,5 +157,31 @@ impl Market {
         } else {
             Err("Failed to buy item".into())
         }
+    }
+
+    pub async fn sold(&self) -> Result<Vec<Item>, Box<dyn std::error::Error>> {
+        // endpoint
+        let url = format!(
+            "https://{}/api3/trade_get_items",
+            self.socket.hostname,
+        );
+        let fp4 = self.fp4();
+        let form = [
+            ("sort", "5"),
+            ("token", self.socket.token.as_str()),
+            ("fp4", fp4.as_str()),
+            ("build", "aj.24.726.1455"),
+        ];
+
+        let client = reqwest::Client::new()
+            .post(&url)
+            .form(&form)
+            .send()
+            .await?;
+
+        let body = client.text().await?;
+        let items = parse::item(&body);
+
+        Ok(items)
     }
 }
