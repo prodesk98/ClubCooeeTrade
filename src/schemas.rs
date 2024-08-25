@@ -25,6 +25,7 @@ pub struct ConfigAccount {
     pub name: String,
     pub udid: String,
     pub token: String,
+    pub role: String,
 }
 
 #[derive(Deserialize)]
@@ -41,6 +42,11 @@ pub struct Item {
     pub image: String,
     pub price: u32,
     pub itemt: u32,
+}
+
+#[derive(Deserialize)]
+pub struct ItemMarket {
+    pub history: Vec<f64>,
 }
 
 #[derive(Deserialize)]

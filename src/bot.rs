@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use colored::Colorize;
 use futures::future::join_all;
+use mongodb::bson::{doc, Bson};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 use crate::cache::ItemCache;
@@ -10,6 +11,7 @@ use crate::market::Market;
 use crate::schemas::{ConfigAccount, Item};
 use crate::socket::Socket;
 use crate::telegram::Telegram;
+use crate::trade::Trade;
 
 #[derive(Clone)]
 pub struct Bot {
@@ -21,7 +23,8 @@ pub struct Bot {
 impl Bot {
     pub fn new(
         socket: Socket,
-        account: ConfigAccount,
+        seller: ConfigAccount,
+        buyer: ConfigAccount,
         telegram: Telegram,
         connection: Arc<RwLock<Connection>>,
         cache: Arc<RwLock<ItemCache>>,
@@ -31,7 +34,8 @@ impl Bot {
             cache,
             market: Market::new(
                 socket,
-                account,
+                seller,
+                buyer,
                 telegram
             ),
         }
@@ -59,8 +63,8 @@ impl Bot {
 
             let task = tokio::spawn(async move {
                 match timeout(
-                    Duration::from_secs(3),
-                    Self::verify(item, connection, cache, market)).await {
+                    Duration::from_secs(15),
+                    Self::verify(item, cache, connection, market)).await {
                         Ok(_) => {},
                         Err(e) => eprintln!("{} Error: {:?}", "[-]".red().bold(), e),
                     }
@@ -73,15 +77,13 @@ impl Bot {
     }
 
     async fn verify(
-        item: Item, connection: Arc<RwLock<Connection>>,
+        item: Item,
         cache: Arc<RwLock<ItemCache>>,
+        connection: Arc<RwLock<Connection>>,
         market: Market
     ) -> Result<(), Box<dyn std::error::Error>> {
         // time start
         let _s = std::time::Instant::now();
-
-        // connection guard
-        let connection_guard = connection.write().await;
 
         // cache guard
         let mut cache_guard = cache.write().await;
@@ -91,35 +93,46 @@ impl Bot {
             return Err("Item already cached".into());
         }
 
-        // check if item is qualified
-        let filter = mongodb::bson::doc! {
-            "idtemplate": item.itemt,
-            "price": {
-                "$gte": item.price
+        let search = market.search(item.itemt).await?;
+        let mut trade = Trade::new(search.history, item.price as f64);
+        let qualified = trade.strategy(10.0);
+
+        if qualified {
+            let resale = trade.resale(10.0);
+            let item_clone = item.clone();
+            let item_id = item_clone.id.clone().to_string();
+
+            match market.buy(item_clone).await {
+                Ok(_) => {
+                    eprintln!("{} Bought item: {:?}... {:?}", "[+]".green().bold(), item_id, _s.elapsed());
+                },
+                Err(e) => {
+                    eprintln!("{} Error: {:?}", "[-]".red().bold(), e);
+                    cache_guard.insert(item_id);
+                    return Err(e);
+                }
             }
-        };
 
-        let qualified = connection_guard.read(filter).await.unwrap();
-        eprintln!("{} Verifying item: i:{} t:{}... {:?}", "[?]".white().bold(), item.id, item.itemt, _s.elapsed());
-        if qualified.len() == 0 {
-            cache_guard.insert(item.id.to_string());
-            return Err("Item not qualified".into());
-        }
+            // connection guard
+            let connection_guard = connection.write().await;
 
-        eprintln!("{} Qualified item: {:?}... {}|{}cc",
-                  "[!]".green().bold(), item.id, item.itemt, item.price);
+            let item = item.clone();
+            connection_guard.create(doc! {
+                "id": item.id,
+                "price": item.price.to_string(),
+                "resale": resale.to_string(),
+                "timestamp": Bson::String(chrono::Utc::now().to_rfc3339()),
+            }).await?;
 
-        let item_id = item.id.to_string();
-        // sent buy request
-        match market.buy(item).await {
-            Ok(_) => {
-                eprintln!("{} Bought item: {:?}... {:?}", "[+]".green().bold(), item_id, _s.elapsed());
-            },
-            Err(e) => {
-                eprintln!("{} Error: {:?}", "[-]".red().bold(), e);
-                cache_guard.insert(item_id);
-                return Err(e);
-            }
+            match market.sell(item.id, resale).await {
+                Ok(_) => {
+                    eprintln!("{} Sold item: {:?}... {:?}", "[+]".green().bold(), item_id, _s.elapsed());
+                },
+                Err(e) => {
+                    eprintln!("{} Error: {:?}", "[-]".red().bold(), e);
+                    return Err(e);
+                }
+            };
         }
         Ok(())
     }

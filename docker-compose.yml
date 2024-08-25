@@ -1,38 +1,15 @@
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: always
-    environment:
-      - RUST_LOG=info
-      - MONGODB_DSN=mongodb://mtz:7b36a5a4350a563bf6ca158386ebe3e7@mongodb:27017
-    volumes:
-      - ./tokens.json:/app/tokens.json
-      - ./config.json:/app/config.json
-      - ./servers.json:/app/servers.json
-      - ./items.json:/app/items.json
-    depends_on:
-      - mongodb
-
   mongodb:
     image: mongo:latest
     restart: always
     ports:
-      - "27012:27017"
+      - "27013:27017"
     volumes:
       - mongo-data:/data/db
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=mtz
-      - MONGO_INITDB_ROOT_PASSWORD=7b36a5a4350a563bf6ca158386ebe3e7
-      - MONGO_INITDB_DATABASE=cooee_bot
-
-  redis:
-    image: redis:latest
-    restart: always
-    ports:
-      - "6372:6379"
-    command: redis-server --requirepass 7b36a5a4350a563bf6ca158386ebe3e7
+      - MONGO_INITDB_ROOT_USERNAME=protons
+      - MONGO_INITDB_ROOT_PASSWORD=c2f193e26f960f1b3649cbd3e31d5255
+      - MONGO_INITDB_DATABASE=clubcooee_trade
 
 volumes:
   mongo-data:

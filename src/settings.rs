@@ -6,13 +6,12 @@ use tokio::io::{AsyncReadExt};
 use crate::schemas::{
     Config,
     ConfigAccount,
-    Items,
 };
 use crate::database::Connection;
 
 
 pub async fn load_accounts(db: &Client) -> Vec<ConfigAccount> {
-    let collection = db.database("cooee_bot").collection("accounts");
+    let collection = db.database("clubcooee_trade").collection("accounts");
     let curd = Connection::new(collection);
     let filter = doc! {};
     let accounts = curd.read(filter).await.unwrap();
@@ -22,12 +21,13 @@ pub async fn load_accounts(db: &Client) -> Vec<ConfigAccount> {
             name: account.get("name").unwrap().as_str().unwrap().to_string(),
             udid: account.get("udid").unwrap().as_str().unwrap().to_string(),
             token: account.get("token").unwrap().as_str().unwrap().to_string(),
+            role: account.get("role").unwrap().as_str().unwrap().to_string(),
         }
     }).collect()
 }
 
 pub async fn load_tokens(db: &Client) -> Vec<String> {
-    let collection = db.database("cooee_bot").collection("tokens");
+    let collection = db.database("clubcooee_trade").collection("tokens");
     let curd = Connection::new(collection);
     let filter = doc! {};
     let tokens = curd.read(filter).await.unwrap();
@@ -38,7 +38,7 @@ pub async fn load_tokens(db: &Client) -> Vec<String> {
 }
 
 pub async fn load_servers(db: &Client) -> Vec<String> {
-    let collection = db.database("cooee_bot").collection("servers");
+    let collection = db.database("clubcooee_trade").collection("servers");
     let curd = Connection::new(collection);
     let filter = doc! {};
     let servers = curd.read(filter).await.unwrap();
@@ -49,7 +49,7 @@ pub async fn load_servers(db: &Client) -> Vec<String> {
 }
 
 pub async fn load_config(db: &Client) -> Config {
-    let collection = db.database("cooee_bot").collection("config");
+    let collection = db.database("clubcooee_trade").collection("config");
     let curd = Connection::new(collection);
     let filter = doc! {};
     let config = curd.read(filter).await.unwrap();
@@ -68,34 +68,7 @@ pub async fn load_config(db: &Client) -> Config {
 
 pub async fn migration(db: &Client, name: &str) {
     let start = std::time::Instant::now();
-    if name == "items" {
-        // load items from file items.json
-        let mut file = File::open("items.json").await.expect("File not found");
-        let mut contents = vec![];
-        file.read_to_end(&mut contents).await.expect("Error while reading file");
-
-        // parse items
-        let items: Vec<Items> = serde_json::from_slice(&contents).expect("Error while reading file");
-
-        // create collection
-        let collection = db.database("cooee_bot").collection("items");
-        let curd = Connection::new(collection);
-
-        // check if the collection is empty
-        let filter = doc! {};
-        let fetch = curd.read(filter).await.unwrap();
-        if fetch.len() == 0 && items.len() > 0 {
-            // insert items into the collection
-            for item in items {
-                let doc = doc! {
-                    "idtemplate": item.idtemplate,
-                    "name": item.name,
-                    "price": item.price,
-                };
-                curd.create(doc).await.unwrap();
-            }
-        }
-    } else if name == "servers" {
+    if name == "servers" {
         // load servers from file servers.json
         let mut file = File::open("servers.json").await.expect("File not found");
         let mut contents = vec![];
@@ -105,7 +78,7 @@ pub async fn migration(db: &Client, name: &str) {
         let servers: Vec<String> = serde_json::from_slice(&contents).expect("Error while reading file");
 
         // create collection
-        let collection = db.database("cooee_bot").collection("servers");
+        let collection = db.database("clubcooee_trade").collection("servers");
         let curd = Connection::new(collection);
 
         // check if the collection is empty
@@ -130,7 +103,7 @@ pub async fn migration(db: &Client, name: &str) {
         let tokens: Vec<String> = serde_json::from_slice(&contents).expect("Error while reading file");
 
         // create collection
-        let collection = db.database("cooee_bot").collection("tokens");
+        let collection = db.database("clubcooee_trade").collection("tokens");
         let curd = Connection::new(collection);
 
         // check if the collection is empty
@@ -153,7 +126,7 @@ pub async fn migration(db: &Client, name: &str) {
         let config: Config = serde_json::from_slice(&contents).expect("Error while reading file");
 
         // create collection
-        let collection = db.database("cooee_bot").collection("config");
+        let collection = db.database("clubcooee_trade").collection("config");
         let curd = Connection::new(collection);
 
         // check if the collection is empty
@@ -176,7 +149,7 @@ pub async fn migration(db: &Client, name: &str) {
         let accounts: Vec<ConfigAccount> = serde_json::from_slice(&contents).expect("Error while reading file");
 
         // create collection
-        let collection = db.database("cooee_bot").collection("accounts");
+        let collection = db.database("clubcooee_trade").collection("accounts");
         let curd = Connection::new(collection);
 
         // check if the collection is empty
@@ -189,6 +162,7 @@ pub async fn migration(db: &Client, name: &str) {
                     "name": account.name,
                     "udid": account.udid,
                     "token": account.token,
+                    "role": account.role,
                 };
                 curd.create(doc).await.unwrap();
             }

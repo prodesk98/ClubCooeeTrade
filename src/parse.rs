@@ -40,3 +40,21 @@ pub fn item(data: &str) -> Vec<Item> {
     }
     items
 }
+
+pub fn prices(data: &str) -> Vec<f64> {
+    let re = Regex::new(r#""prices":\[(.*?)]"#).unwrap();
+    let mut prices = Vec::new();
+
+    if let Some(captures) = re.captures(data) {
+        if let Some(price_match) = captures.get(1) {
+            let prices_str = price_match.as_str();
+            for price in prices_str.split(',') {
+                if let Ok(parsed_price) = price.trim().parse::<f64>() {
+                    prices.push(parsed_price);
+                }
+            }
+        }
+    }
+
+    prices
+}
