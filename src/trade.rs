@@ -1,5 +1,3 @@
-use colored::Colorize;
-
 pub struct Trade {
     history: Vec<f64>,
     current: f64,
