@@ -63,7 +63,7 @@ impl Bot {
 
             let task = tokio::spawn(async move {
                 match timeout(
-                    Duration::from_secs(15),
+                    Duration::from_secs(5),
                     Self::verify(item, cache, connection, market)).await {
                         Ok(_) => {},
                         Err(e) => eprintln!("{} Error: {:?}", "[-]".red().bold(), e),
@@ -85,55 +85,65 @@ impl Bot {
         // time start
         let _s = std::time::Instant::now();
 
-        // cache guard
-        let mut cache_guard = cache.write().await;
+        // cache guard read
+        let cache_guard_read = cache.write().await;
 
         // check if item is already cached
-        if cache_guard.contains(&item.id.to_string()) {
+        if cache_guard_read.contains(&item.id.to_string()) {
             return Err("Item already cached".into());
         }
+        drop(cache_guard_read);
 
         let search = market.search(item.itemt).await?;
         let mut trade = Trade::new(search.history, item.price as f64);
         let qualified = trade.strategy(10.0);
 
-        if qualified {
-            let resale = trade.resale(10.0);
-            let item_clone = item.clone();
-            let item_id = item_clone.id.clone().to_string();
-
-            match market.buy(item_clone).await {
-                Ok(_) => {
-                    eprintln!("{} Bought item: {:?}... {:?}", "[+]".green().bold(), item_id, _s.elapsed());
-                },
-                Err(e) => {
-                    eprintln!("{} Error: {:?}", "[-]".red().bold(), e);
-                    cache_guard.insert(item_id);
-                    return Err(e);
-                }
-            }
-
-            // connection guard
-            let connection_guard = connection.write().await;
-
-            let item = item.clone();
-            connection_guard.create(doc! {
-                "id": item.id,
-                "price": item.price.to_string(),
-                "resale": resale.to_string(),
-                "timestamp": Bson::String(chrono::Utc::now().to_rfc3339()),
-            }).await?;
-
-            match market.sell(item.id, resale).await {
-                Ok(_) => {
-                    eprintln!("{} Sold item: {:?}... {:?}", "[+]".green().bold(), item_id, _s.elapsed());
-                },
-                Err(e) => {
-                    eprintln!("{} Error: {:?}", "[-]".red().bold(), e);
-                    return Err(e);
-                }
-            };
+        if !qualified {
+            cache.write().await.insert(item.id.to_string());
+            return Err("Item not qualified".into());
         }
+
+        let resale = trade.resale(10.0);
+        let item_clone = item.clone();
+        let item_id = item_clone.id.clone().to_string();
+        let item_template = item_clone.itemt.clone().to_string();
+
+        match market.buy(item_clone).await {
+            Ok(_) => {
+                eprintln!("{} Bought item: {:?} {:?}... {:?}", "[+]".green().bold(),
+                          item_id, item_template, _s.elapsed());
+            },
+            Err(e) => {
+                eprintln!("{} Error: {:?} {:?} {:?}...", "[-]".red().bold(),
+                          e, item_id, item_template);
+                return Err(e);
+            }
+        }
+
+        // connection guard
+        let connection_guard = connection.write().await;
+
+        let item = item.clone();
+        connection_guard.create(
+            doc! {
+                    "id": item.id,
+                    "price": item.price.to_string(),
+                    "resale": resale.to_string(),
+                    "timestamp": Bson::String(chrono::Utc::now().to_rfc3339()),
+                }
+        ).await?;
+        drop(connection_guard);
+
+        match market.sell(item.id, resale).await {
+            Ok(_) => {
+                eprintln!("{} Sold item: {:?}... {:?}", "[+]".green().bold(), item_id, _s.elapsed());
+            },
+            Err(e) => {
+                eprintln!("{} Error: {:?}", "[-]".red().bold(), e);
+                return Err(e);
+            }
+        };
+
         Ok(())
     }
 }

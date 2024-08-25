@@ -19,7 +19,6 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 use colored::Colorize;
-use tokio::spawn;
 use tokio::sync::RwLock;
 use crate::cache::ItemCache;
 use crate::database::Connection;
@@ -147,29 +146,22 @@ async fn main() {
         let cache_clone = Arc::clone(&cache);
         //
 
-        spawn(async move {
-            let result = tokio::time::timeout(
-                Duration::from_secs(15),
-                start(
-                    ip_clone,
-                    token_clone,
-                    account_seller_clone,
-                    account_buyer_clone,
-                    telegram_clone,
-                    hostname,
-                    proxy_clone,
-                    connection_clone,
-                    cache_clone,
-                ),
-            ).await;
+        match start(
+            ip_clone,
+            token_clone,
+            account_seller_clone,
+            account_buyer_clone,
+            telegram_clone,
+            hostname,
+            proxy_clone,
+            connection_clone,
+            cache_clone,
+        ).await {
+            Ok(_) => {},
+            Err(e) => eprintln!("{} session error: {:?}", "[-]".red().bold(), e),
+        };
 
-            // Handle the result of `start`
-            if let Err(e) = result {
-                eprintln!("{} {}", "[-]".red().bold(), e);
-            }
-        });
-
-        // sleep 200 milliseconds
-        tokio::time::sleep(Duration::from_secs(30)).await;
+        // sleep 50 seconds
+        tokio::time::sleep(Duration::from_secs(50)).await;
     }
 }
