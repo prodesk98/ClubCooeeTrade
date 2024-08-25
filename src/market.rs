@@ -149,7 +149,7 @@ impl Market {
 
         if buying {
             let message = format!(
-                "{} ({})\nid: {}, price: {}cc",
+                "✅ {} ({})\nid: {}, price: {}cc",
                 item.name, item.itemt, item.id, item.price
             );
             self.telegram.send_image(item.image.to_string().replace("\\/", "/"), &message).await?;

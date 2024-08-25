@@ -19,6 +19,7 @@ pub struct Bot {
     sold: Arc<RwLock<Connection>>,
     cache: Arc<RwLock<ItemCache>>,
     market: Market,
+    telegram: Telegram,
 }
 
 impl Bot {
@@ -39,8 +40,9 @@ impl Bot {
                 socket,
                 seller,
                 buyer,
-                telegram
+                telegram.clone(),
             ),
+            telegram,
         }
     }
 
@@ -71,16 +73,21 @@ impl Bot {
         let sold = Arc::clone(&self.sold);
         let sold_guard = sold.write().await;
         for it in items_solid {
+            let it_clone = it.clone();
             if sold_guard.read(doc! {"id": it.id}).await?.len() == 0 {
                 sold_guard.create(
                     doc! {
                         "id": it.id,
                         "itemt": it.itemt,
-                        "name": it.name,
+                        "name": String::from_utf8_lossy(it.name.as_bytes()).to_string(),
                         "price": it.price,
                         "created_at": Bson::String(chrono::Utc::now().to_rfc3339()),
                     }
                 ).await?;
+                self.telegram.send_image(it.image.to_string().replace("\\/", "/"), &format!(
+                    "🔄 {} ({})\nid: {}, price: {}cc",
+                    String::from_utf8_lossy(it.name.as_bytes()).to_string(), it_clone.itemt, it_clone.id, it_clone.price
+                )).await?;
             }
         }
         drop(sold_guard);
