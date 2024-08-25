@@ -3,6 +3,7 @@ use mongodb::{
     Collection,
 };
 use futures::stream::StreamExt;
+use mongodb::options::FindOptions;
 
 #[derive(Clone)]
 pub struct Connection {

@@ -176,7 +176,7 @@ async fn main() {
             Err(e) => eprintln!("{} session error: {:?}", "[-]".red().bold(), e),
         };
 
-        // sleep 50 seconds
-        tokio::time::sleep(Duration::from_secs(50)).await;
+        // sleep 60 seconds
+        tokio::time::sleep(Duration::from_secs(60)).await;
     }
 }

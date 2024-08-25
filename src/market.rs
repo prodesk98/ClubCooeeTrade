@@ -1,7 +1,7 @@
 use colored::Colorize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::parse;
-use crate::schemas::{ConfigAccount, Item, ItemMarket};
+use crate::schemas::{ConfigAccount, Item};
 use crate::socket::Socket;
 use crate::telegram::Telegram;
 
@@ -39,36 +39,26 @@ impl Market {
     }
 
     pub async fn fetch(&self) -> Result<Vec<Item>, Box<dyn std::error::Error>> {
-        // HTTP request
-        let request = self.socket.http(
-            "/api3/trade_get_items",
-            format!(
-                "sort=2&token={}&fp4={}&build=aj.24.726.1455",
-                self.socket.token, self.fp4()
-            )
+        let url = format!(
+            "https://{}/api3/trade_get_items",
+            self.socket.hostname,
         );
 
-        // TCP connection
-        let stream = self.socket.connect().await?;
-        let mut tls_stream = self.socket.tls_connect(stream).await?;
+        let fp4 = self.fp4();
+        let form = [
+            ("sort", "2"),
+            ("token", self.socket.token.as_str()),
+            ("fp4", fp4.as_str()),
+            ("build", "aj.24.726.1455"),
+        ];
 
-        // Send TLS request
-        tls_stream.write_all(request.as_bytes()).await?;
+        let client = reqwest::Client::new()
+            .post(&url)
+            .form(&form)
+            .send()
+            .await?;
 
-        // Read response
-        let mut buffer = [0; 1024*12];
-        let mut response = Vec::new();
-        let n = tls_stream.read(&mut buffer).await?;
-        response.extend_from_slice(&buffer[..n]);
-
-        let body = String::from_utf8_lossy(&response);
-
-        // blocking
-        if body.contains("misuse quota") {
-            return Err("Misuse quota".into());
-        }
-
-        // extract items from regex
+        let body = client.text().await?;
         let items = parse::item(&body);
 
         Ok(items)

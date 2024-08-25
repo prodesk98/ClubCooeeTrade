@@ -79,14 +79,14 @@ impl Bot {
                     doc! {
                         "id": it.id,
                         "itemt": it.itemt,
-                        "name": String::from_utf8_lossy(it.name.as_bytes()).to_string(),
+                        "name": it.name,
                         "price": it.price,
                         "created_at": Bson::String(chrono::Utc::now().to_rfc3339()),
                     }
                 ).await?;
                 self.telegram.send_image(it.image.to_string().replace("\\/", "/"), &format!(
                     "🔄 {} ({})\nid: {}, price: {}cc",
-                    String::from_utf8_lossy(it.name.as_bytes()).to_string(), it_clone.itemt, it_clone.id, it_clone.price
+                    it_clone.name, it_clone.itemt, it_clone.id, it_clone.price
                 )).await?;
             }
         }
@@ -98,11 +98,12 @@ impl Bot {
             let traders = Arc::clone(&self.traders);
             let sold = Arc::clone(&self.sold);
             let market = self.market.clone();
+            let telegram = self.telegram.clone();
 
             let task = tokio::spawn(async move {
                 match timeout(
-                    Duration::from_secs(15),
-                    Self::verify(item, cache, traders, sold, market)).await {
+                    Duration::from_secs(30),
+                    Self::verify(item, cache, traders, sold, market, telegram)).await {
                         Ok(_) => {},
                         Err(e) => eprintln!("{} Error: {:?}", "[-]".red().bold(), e),
                     }
@@ -111,6 +112,7 @@ impl Bot {
             tasks.push(task);
         }
         join_all(tasks).await;
+        eprintln!("{} Done... {:?}", "[*]".blue().bold(), _s.elapsed());
         Ok(())
     }
 
@@ -119,19 +121,20 @@ impl Bot {
         cache: Arc<RwLock<ItemCache>>,
         traders: Arc<RwLock<Connection>>,
         sold: Arc<RwLock<Connection>>,
-        market: Market
+        market: Market,
+        telegram: Telegram,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // time start
         let _s = std::time::Instant::now();
 
         // cache guard read
-        let cache_guard_read = cache.write().await;
+        let cache_guard_read = cache.read().await;
 
-        let item_id = item.id.to_string();
+        let item_id = item.id.clone();
         let item_template = item.itemt.clone();
 
         // check if item is already cached
-        if cache_guard_read.contains(&item_id) {
+        if cache_guard_read.contains(&item_id.clone().to_string()) {
             return Err("Item already cached".into());
         }
         drop(cache_guard_read);
@@ -156,6 +159,10 @@ impl Bot {
             cache.write().await.insert(item.id.to_string());
             return Err("Item not qualified".into());
         }
+        telegram.send_image(item.image.to_string().replace("\\/", "/"), &format!(
+            "❗️{} ({})\nid: {}, price: {}cc",
+            String::from_utf8_lossy(item.name.as_bytes()).to_string(), item.itemt, item.id, item.price
+        )).await?;
 
         let resale = trade.resale(10.0);
         let item_clone = item.clone();
@@ -177,6 +184,11 @@ impl Bot {
         // connection guard
         let traders_guard = traders.write().await;
 
+        // cache
+        let mut cache_guard = cache.write().await;
+        cache_guard.insert(item_id.clone().to_string());
+        drop(cache_guard);
+
         let item = item.clone();
         traders_guard.create(
             doc! {
@@ -190,7 +202,7 @@ impl Bot {
 
         match market.sell(item.id, resale).await {
             Ok(_) => {
-                eprintln!("{} Sold item: {:?}... {:?}", "[+]".green().bold(), item_id, _s.elapsed());
+                eprintln!("{} Sold item: {:?}... {:?}", "[+]".green().bold(), item_id.clone(), _s.elapsed());
             },
             Err(e) => {
                 eprintln!("{} Error: {:?}", "[-]".red().bold(), e);
