@@ -1,9 +1,9 @@
 service:
-	chmod +x ClubCooee
-	cp clubcooee.service /etc/systemd/system/
+	chmod +x club_cooee_trade
+	cp clubcooee_trade.service /etc/systemd/system/
 	systemctl daemon-reload
-	systemctl start clubcooee.service
-	systemctl status clubcooee.service
+	systemctl start clubcooee_trade.service
+	systemctl status clubcooee_trade.service
 
 journal:
 	journalctl -u clubcooee.service -f

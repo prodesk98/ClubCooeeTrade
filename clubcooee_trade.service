@@ -1,14 +1,14 @@
 [Unit]
-Description=Club Cooee
+Description=Club Cooee Trade
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/root/market/ClubCooee
+ExecStart=/root/trade/club_cooee_trade
 Restart=on-failure
 User=root
 Group=root
-WorkingDirectory=/root/market/
+WorkingDirectory=/root/trade/
 Environment="RUST_LOG=info"
 
 [Install]
