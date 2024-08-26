@@ -5,7 +5,7 @@ services:
     ports:
       - "27013:27017"
     volumes:
-      - mongo-data-trade:/data/db
+      - mongo-data:/data/db
     environment:
       - MONGO_INITDB_ROOT_USERNAME=protons
       - MONGO_INITDB_ROOT_PASSWORD=c2f193e26f960f1b3649cbd3e31d5255
