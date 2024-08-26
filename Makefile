@@ -6,13 +6,13 @@ service:
 	systemctl status clubcooee_trade.service
 
 journal:
-	journalctl -u clubcooee.service -f
+	journalctl -u clubcooee_trade.service -f
 
 stop:
-	systemctl stop clubcooee.service
+	systemctl stop clubcooee_trade.service
 
 start:
-	systemctl start clubcooee.service
+	systemctl start clubcooee_trade.service
 
 dependencies:
 	curl -fsSL https://get.docker.com | sh
