@@ -79,6 +79,6 @@ impl Trade {
         self.resale() < ma && // resale price is lower than moving average
         self.history.len() >= 10 && // at least 10 prices in history
         self.current <= 1990.0 && // current price is less than 1990
-        rsi >= 80.0 // rsi is greater than 80 -> overbought
+        rsi >= 50.0 // rsi is greater than 50 -> overbought
     }
 }
