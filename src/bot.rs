@@ -152,8 +152,9 @@ impl Bot {
         let history = history.iter().map(|&x| x as f64).collect::<Vec<f64>>();
 
         // trade verification
-        let mut trade = Trade::new(history, item.price as f64);
-        let qualified = trade.strategy(10.0);
+        let profit = 20.0;
+        let mut trade = Trade::new(history, item.price as f64, profit);
+        let qualified = trade.strategy();
 
         if !qualified {
             cache.write().await.insert(item.id.to_string());
@@ -164,7 +165,7 @@ impl Bot {
             String::from_utf8_lossy(item.name.as_bytes()).to_string(), item.itemt, item.id, item.price
         )).await?;
 
-        let resale = trade.resale(30.0);
+        let resale = trade.resale();
         let item_clone = item.clone();
         let item_id = item_clone.id.clone().to_string();
         let item_template = item_clone.itemt.clone().to_string();

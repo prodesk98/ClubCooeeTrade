@@ -1,13 +1,15 @@
 pub struct Trade {
     history: Vec<f64>,
     current: f64,
+    profit: f64,
 }
 
 impl Trade {
-    pub fn new(history: Vec<f64>, current: f64) -> Self {
+    pub fn new(history: Vec<f64>, current: f64, profit: f64) -> Self {
         Trade {
             history,
             current,
+            profit,
         }
     }
 
@@ -58,12 +60,12 @@ impl Trade {
         100.0 - (100.0 / (1.0 + rs))
     }
 
-    pub fn resale(&self, desired_profit_margin: f64) -> f64 {
-        let resale_price = self.current * (1.0 + desired_profit_margin / 100.0);
+    pub fn resale(&self) -> f64 {
+        let resale_price = self.current * (1.0 + self.profit / 100.0);
         resale_price.ceil()
     }
 
-    pub fn strategy(&mut self, desired_profit_margin: f64) -> bool {
+    pub fn strategy(&mut self) -> bool {
         self.remove_outliers_iqr();
         let ma = self.moving_average(5);
         if ma == 0.0 {
@@ -71,13 +73,12 @@ impl Trade {
         }
 
         let rsi = self.rsi(5);
-        let resale_price = self.resale(desired_profit_margin);
 
         eprintln!("rsi: {:.2}, ma: {:.2}, current: {:.2}", rsi, ma, self.current);
 
-        resale_price < ma &&
-            self.history.len() >= 10 &&
-            self.current <= 1990.0 &&
-            rsi >= 80.0
+        self.resale() < ma && // resale price is lower than moving average
+        self.history.len() >= 10 && // at least 10 prices in history
+        self.current <= 1990.0 && // current price is less than 1990
+        rsi >= 80.0 // rsi is greater than 80 -> overbought
     }
 }
