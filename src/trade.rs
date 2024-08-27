@@ -76,7 +76,7 @@ impl Trade {
         eprintln!("rsi: {:.2}, ma: {:.2}, current: {:.2}", rsi, ma, self.current);
 
         resale_price < ma &&
-            self.history.len() >= 5 &&
+            self.history.len() >= 10 &&
             self.current <= 1990.0 &&
             rsi >= 80.0
     }

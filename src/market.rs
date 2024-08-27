@@ -73,9 +73,9 @@ impl Market {
                 id,
                 price,
                 1,
-                self.seller.token,
+                self.buyer.token,
                 self.fp4(),
-                self.seller.udid
+                self.buyer.udid
             )
         );
 

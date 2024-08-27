@@ -1,20 +1,14 @@
-use base64::Engine;
 use reqwest::Url;
-use base64::prelude::BASE64_STANDARD;
 use regex::Regex;
 use crate::schemas::{Item, Proxy};
 
 pub fn proxy(uri: &str) -> Proxy {
     let parsed = Url::parse(uri).unwrap();
 
-    let username = parsed.username();
-    let password = parsed.password().unwrap();
     let host = parsed.host_str().unwrap().to_string();
     let port = parsed.port().unwrap_or(8080);
-    let credentials = BASE64_STANDARD.encode(format!("{}:{}", username, password).as_bytes());
 
     Proxy {
-        credentials,
         host,
         port,
     }

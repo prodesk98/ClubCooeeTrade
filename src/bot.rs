@@ -164,7 +164,7 @@ impl Bot {
             String::from_utf8_lossy(item.name.as_bytes()).to_string(), item.itemt, item.id, item.price
         )).await?;
 
-        let resale = trade.resale(10.0);
+        let resale = trade.resale(30.0);
         let item_clone = item.clone();
         let item_id = item_clone.id.clone().to_string();
         let item_template = item_clone.itemt.clone().to_string();

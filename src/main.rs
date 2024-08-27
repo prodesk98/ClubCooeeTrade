@@ -12,6 +12,7 @@ mod license;
 mod logger;
 mod telegram;
 mod trade;
+mod proxies;
 
 use mongodb::Client;
 use dotenvy::dotenv;
@@ -19,6 +20,7 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 use colored::Colorize;
+use rand::prelude::SliceRandom;
 use tokio::sync::RwLock;
 use crate::cache::ItemCache;
 use crate::database::Connection;
@@ -84,9 +86,6 @@ async fn main() {
         }
     }
 
-    // Proxy
-    let proxy = parse::proxy(&env::var("PROXY").unwrap());
-
     // migration
     migration(&mongo_client, "servers").await;
     migration(&mongo_client, "tokens").await;
@@ -94,13 +93,17 @@ async fn main() {
     migration(&mongo_client, "accounts").await;
 
     // Load configurations
-    let tokens = load_tokens(&mongo_client).await;
     let servers = load_servers(&mongo_client).await;
     let config = load_config(&mongo_client).await;
     let accounts = load_accounts(&mongo_client).await;
 
+    // random tokens
+    let tokens = load_tokens(&mongo_client).await;
+    let mut tokens_random = tokens.clone();
+    tokens_random.shuffle(&mut rand::thread_rng());
+
     // Algorithm Round Robin
-    let rr_tokens = round_robin::RoundRobin::new(tokens);
+    let rr_tokens = round_robin::RoundRobin::new(tokens_random);
     let rr_servers = round_robin::RoundRobin::new(servers);
     let rr_accounts_seller = round_robin::RoundRobin::new(
         accounts
@@ -146,6 +149,22 @@ async fn main() {
         env::var("BOT_TELEGRAM_CHAT_ID").unwrap()
     );
 
+    // Proxy Manager
+    let mut proxy_manager = proxies::ProxyManager::new(
+        Arc::new(
+            RwLock::new(
+                rr_tokens.clone()
+            )
+        ),
+        Arc::new(
+            RwLock::new(
+                rr_servers.clone()
+            )
+        )
+    )
+    .await;
+    proxy_manager.load().await;
+
     loop {
         // clone variables
         let hostname = config.hostname.clone();
@@ -154,7 +173,7 @@ async fn main() {
         let account_seller_clone = rr_accounts_seller.next().await.clone().unwrap().clone();
         let account_buyer_clone = rr_accounts_buyer.next().await.clone().unwrap().clone();
         let telegram_clone = telegram.clone();
-        let proxy_clone = proxy.clone();
+        let proxy = proxy_manager.next().await;
         let connection_trades_clone = Arc::clone(&connection_trades);
         let connection_sold_clone = Arc::clone(&connection_sold);
         let cache_clone = Arc::clone(&cache);
@@ -167,7 +186,7 @@ async fn main() {
             account_buyer_clone,
             telegram_clone,
             hostname,
-            proxy_clone,
+            proxy,
             connection_trades_clone,
             connection_sold_clone,
             cache_clone,
@@ -178,5 +197,6 @@ async fn main() {
 
         // sleep 60 seconds
         tokio::time::sleep(Duration::from_secs(60)).await;
+        proxy_manager.load().await;
     }
 }

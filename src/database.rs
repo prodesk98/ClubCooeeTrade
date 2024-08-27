@@ -3,6 +3,8 @@ use mongodb::{
     Collection,
 };
 use futures::stream::StreamExt;
+use mongodb::bson::doc;
+use mongodb::options::FindOptions;
 
 #[derive(Clone)]
 pub struct Connection {
@@ -20,6 +22,8 @@ impl Connection {
     }
 
     pub async fn read(&self, filter: Document) -> mongodb::error::Result<Vec<Document>> {
+        // limit 20
+        let options = FindOptions::builder().limit(20).sort(doc! {"_id": -1}).build();
         let mut cursor = self.collection.find(filter).await?;
         let mut results = Vec::new();
 

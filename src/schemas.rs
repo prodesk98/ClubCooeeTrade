@@ -2,7 +2,6 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
 pub struct Proxy {
-    pub credentials: String,
     pub host: String,
     pub port: u16,
 }

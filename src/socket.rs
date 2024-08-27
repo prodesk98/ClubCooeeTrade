@@ -66,10 +66,9 @@ impl Socket {
         let mut stream = TcpStream::connect(addr_proxy).await?;
 
         let request = format!(
-            "CONNECT {} HTTP/1.1\r\nHost: {}\r\nProxy-Authorization: Basic {}\r\n\r\n",
+            "CONNECT {} HTTP/1.1\r\nHost: {}\r\n\r\n",
             addr,
             addr,
-            self.proxy.credentials,
         );
 
         stream.write_all(request.as_bytes()).await?;
@@ -80,7 +79,6 @@ impl Socket {
 
         let response = String::from_utf8_lossy(&proxy_response[..n]);
         if !response.contains("200 Connection established") {
-            eprintln!("{} Proxy connection failed: {}", "[-]".red().bold(), response);
             return Err("Proxy connection failed".into());
         }
         eprintln!("{} Proxy connection established... {:?}", "[*]".blue().bold(), _s.elapsed());
@@ -100,7 +98,6 @@ impl Socket {
         let tls_stream = match connector.connect(domain, stream).await {
             Ok(tls_stream) => tls_stream,
             Err(e) => {
-                eprintln!("{} TLS connection failed: {:?}", "[-]".red().bold(), e);
                 return Err(Box::new(e));
             }
         };
